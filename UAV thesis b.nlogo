@@ -38,7 +38,11 @@ uavs-own [
   home-dist
   uspeed
 ]
+helis-own [
+  current-target
 
+
+]
 ;================================
 ; SETUP Procedures
 ;================================
@@ -46,7 +50,7 @@ uavs-own [
 to setup
   clear-all
   reset-ticks
-  set genetic-code-list random-genepool
+  set genetic-code-list random-genepool ; where the initial genes are set
   set generation-times n-values population-size [[]]
   show generation-times
   set globalarray n-values max-generation [[]]
@@ -240,7 +244,7 @@ to-report run-simulation
 
       set force-x 0
       set force-y 0
-      set label round energy
+      if show-energy [set label round energy]
       find-targets-in-range
       find-targets-close-range
       find-uavs-in-range
@@ -255,7 +259,8 @@ to-report run-simulation
           [set current-target nobody]
       ]
 
-      if any? targets-close-range [uav-avoid-target]        ; UAVs are repelled by targets in close range
+      if any? targets-close-range [
+        uav-avoid-target]        ; UAVs are repelled by targets in close range
       if any? uavs-in-range       [uav-cohere]              ; UAVs are attracted to other UAVs who are pursuing targets
       if any? uavs-close-range    [uav-avoid-uav]           ; UAvs are repelled by other UAVs in close range
       uav-avoid-wall                                ; UAVs are repelled by walls in close range
@@ -280,23 +285,24 @@ to-report run-simulation
     ] ; end of uavs
 
     ask helis[
-      find-targets-in-range
-      find-targets-close-range
+      ;find-targets-in-range
+      ;find-targets-close-range
 
-      set targets-close-range targets with [color = red] in-radius 15
+      set targets-close-range targets with [color = red]
 
       ifelse any? targets with [color = red]
-      [ face one-of targets with [color = red]
-        ;fd helis-speed
+      [ face min-one-of targets-close-range [distance myself]
+        fd helis-speed
         if any? targets-close-range [
           fd helis-speed
-          move-to one-of targets-close-range
+         ; move-to one-of targets-close-range
         ]
 
         ask targets with [ color = red ] in-radius (sensor-range / 2) [die] ]
       [ ;fd helis-speed
         facexy homex homey
-        stop ]
+        ;stop
+      ]
     ]
 
     ask targets [
@@ -707,7 +713,7 @@ helis-speed
 helis-speed
 0
 2
-2.0
+0.7
 0.1
 1
 NIL
@@ -847,6 +853,17 @@ mutation-rate
 1
 NIL
 HORIZONTAL
+
+SWITCH
+58
+472
+186
+505
+show-energy
+show-energy
+1
+1
+-1000
 
 @#$#@#$#@
 ## WHAT IS IT?

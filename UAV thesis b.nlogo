@@ -14,7 +14,10 @@ globals[
   homex
   homey
   MAXenergy
+  HUN
   recharge-speed
+  typ1count
+  typ2count
 ]
 
 turtles-own [
@@ -24,6 +27,7 @@ turtles-own [
   targets-close-range
   force-x
   force-y
+  types
 ]
 
 uavs-own [
@@ -52,16 +56,22 @@ to setup
   reset-ticks
   set genetic-code-list random-genepool ; where the initial genes are set
   set generation-times n-values population-size [[]]
-  show generation-times
+  ;show generation-times
   set globalarray n-values max-generation [[]]
   set generation-count 0
   set homex 0
   set homey 0
+  set HUN 35
   set MAXenergy 200
   set recharge-speed 10
   show genetic-code-list
-  show generation-times
+  ;show generation-times
+  ;let testlist (sublist genetic-code-list 0 1)
+  let testlist binary-to-decimal(graycode-to-binary(item 1 genetic-code-list))
+  ;let testlist1 (sublist testlist 0 3)
+  show  testlist
 
+  ;show testlist
 end
 
 
@@ -85,14 +95,17 @@ end
 to-report random-genepool
   ;; local variables
   let gene-length 4
-  let num-genes 4
+  let num-genes 29
   let chromosome-length gene-length * num-genes
   let random-code-list n-values population-size [n-values chromosome-length [one-of[0 1]]]
+  output-type "random gene"
+  ;show binary-to-decimal(graycode-to-binary(position 1 random-code-list))
   report random-code-list
 end
 
-to-report avg-time [genetic-code]
+to-report avg-time [genetic-code] ;where the simulation runs
   let total-time 0
+  show genetic-code
   repeat num-tests[
     setup-simulation (genetic-code)
     set total-time (total-time + run-simulation)
@@ -193,12 +206,32 @@ to setup-simulation [genetic-code]
   let UU-repulsion-coeff (binary-to-decimal(graycode-to-binary(sublist genetic-code 4 8)))
   let UT-attraction-coeff (binary-to-decimal(graycode-to-binary(sublist genetic-code 8 12)))
   let UT-repulsion-coeff (binary-to-decimal(graycode-to-binary(sublist genetic-code 12 16)))
+  let type1N (binary-to-decimal(graycode-to-binary(sublist genetic-code 12 16))) + 1
+  let type2N (binary-to-decimal(graycode-to-binary(sublist genetic-code 4 8))) + 1
+  set typ1count type1N * agent-population / HUN
+  set typ2count type2N * agent-population / HUN
+  ;show genetic-code
+  ;show sublist genetic-code 12 16
 
+  show typ1count
+  show typ2count
   ; create uavs
   create-uavs agent-population [
+    ;set testcount testcount + 1
     set shape "default"
-    set color white
     set size 1
+    set color white
+; decide type
+    ifelse typ1count > 0.5
+    [ set typ1count typ1count - 1
+      set types 1]
+    [ifelse typ2count > 0.5
+      [set typ2count typ2count - 1
+       set types 2]
+      [set types 3]
+    ]
+    if types = 1 [set color yellow]
+    if types = 2 [set color orange]
     set energy MAXenergy
     set recharging 0
     setxy random-xcor / max-pxcor random-ycor / max-pycor
@@ -208,6 +241,8 @@ to setup-simulation [genetic-code]
     set UT-attraction UT-attraction-coeff
     set UT-repulsion UT-repulsion-coeff
     set uspeed uav-speed
+    ;show testcount
+    ;show types
   ]
 
   ;create targets
@@ -269,6 +304,7 @@ to-report run-simulation
         [set energy energy - uspeed
         if (energy  < home-dist)
         [facexy homex homey
+          ;turn-towards heading uav-max-turn
         if home-dist < 1 [set recharging 1]] ; go home if low
 
         ]
@@ -329,7 +365,6 @@ to-report run-simulation
     ask targets [ fd target-speed ]
     ask helis [ fd helis-speed ]
     display
-
     tick
 
     if (count targets = 0) or (ticks >= max-run-time ) [ report ticks ]
@@ -498,10 +533,10 @@ end
 ;============================================
 @#$#@#$#@
 GRAPHICS-WINDOW
-309
+265
 10
-1113
-815
+911
+657
 -1
 -1
 7.8812
@@ -514,10 +549,10 @@ GRAPHICS-WINDOW
 0
 0
 1
--50
-50
--50
-50
+-40
+40
+-40
+40
 1
 1
 1
@@ -550,7 +585,7 @@ population-size
 population-size
 0
 100
-4.0
+6.0
 1
 1
 NIL
@@ -610,7 +645,7 @@ SWITCH
 179
 show-background?
 show-background?
-0
+1
 1
 -1000
 
@@ -683,7 +718,7 @@ uav-target-separation
 uav-target-separation
 0
 100
-2.0
+1.0
 1
 1
 NIL
@@ -833,7 +868,7 @@ max-run-time
 max-run-time
 0
 10000
-3057.0
+3063.0
 1
 1
 NIL

@@ -18,6 +18,8 @@ globals[
   recharge-speed
   typ1count
   typ2count
+  num-genes
+  gene-length
 ]
 
 turtles-own [
@@ -54,6 +56,8 @@ helis-own [
 to setup
   clear-all
   reset-ticks
+  set num-genes 29
+  set gene-length 4
   set genetic-code-list random-genepool ; where the initial genes are set
   set generation-times n-values population-size [[]]
   ;show generation-times
@@ -61,20 +65,22 @@ to setup
   set generation-count 0
   set homex 0
   set homey 0
-  set HUN 35
+  set HUN 16
   set MAXenergy 200
   set recharge-speed 10
-  show genetic-code-list
-  ;show generation-times
+  ;show genetic-code-list
+  show generation-times
   ;let testlist (sublist genetic-code-list 0 1)
   let testlist binary-to-decimal(graycode-to-binary(item 1 genetic-code-list))
   ;let testlist1 (sublist testlist 0 3)
-  show  testlist
+  ;show  testlist
 
   ;show testlist
 end
 
-
+to-report inc [i]
+  report i
+end
 to go
   ifelse generation-count <= max-generation
   [ foreach generation-times [
@@ -94,11 +100,11 @@ end
 ;=================================
 to-report random-genepool
   ;; local variables
-  let gene-length 4
-  let num-genes 29
+  ;let gene-length 4
+  ;let num-genes 29
   let chromosome-length gene-length * num-genes
   let random-code-list n-values population-size [n-values chromosome-length [one-of[0 1]]]
-  output-type "random gene"
+  ;output-type "random gene"
   ;show binary-to-decimal(graycode-to-binary(position 1 random-code-list))
   report random-code-list
 end
@@ -169,7 +175,9 @@ to create-next-generation
 end
 
 to-report crossover-recombination [bits1 bits2]
-  let split-points n-of 2 [0 4 8 12]
+  let splitsum n-values num-genes [[i] -> i * 4]
+  let split-points n-of 2 splitsum
+
   let split-point-1 item 0 split-points
   let split-point-2 item 1 split-points
   let split-point 1 + random (length bits1 - 1)
@@ -200,21 +208,31 @@ to setup-simulation [genetic-code]
   reset-ticks
 
   if show-background? [import-drawing "map.JPG"] ; display background image
-
+  let type1N (binary-to-decimal(graycode-to-binary(sublist genetic-code 12 16)))
+  let type2N (binary-to-decimal(graycode-to-binary(sublist genetic-code 4 8)))
   ;read UAV properties from genetic code
   let UU-attraction-coeff (binary-to-decimal(graycode-to-binary(sublist genetic-code 0 4)))
   let UU-repulsion-coeff (binary-to-decimal(graycode-to-binary(sublist genetic-code 4 8)))
   let UT-attraction-coeff (binary-to-decimal(graycode-to-binary(sublist genetic-code 8 12)))
   let UT-repulsion-coeff (binary-to-decimal(graycode-to-binary(sublist genetic-code 12 16)))
-  let type1N (binary-to-decimal(graycode-to-binary(sublist genetic-code 12 16))) + 1
-  let type2N (binary-to-decimal(graycode-to-binary(sublist genetic-code 4 8))) + 1
+
   set typ1count type1N * agent-population / HUN
+  ifelse typ1count < 1 [set typ1count 1] ; bound the pop of type1 and type2
+  [
+    if typ1count > agent-population - 2 [set typ1count agent-population - 2]
+  ]
+
+  let leftpop agent-population - typ1count
   set typ2count type2N * agent-population / HUN
+  ifelse typ2count < 1 [set typ2count 1]
+  [
+    if typ2count > leftpop - 1 [set typ2count leftpop - 1]
+  ]
   ;show genetic-code
   ;show sublist genetic-code 12 16
 
-  show typ1count
-  show typ2count
+ ; show typ1count
+  ;show typ2count
   ; create uavs
   create-uavs agent-population [
     ;set testcount testcount + 1
@@ -600,7 +618,7 @@ max-generation
 max-generation
 0
 1000
-651.0
+3.0
 1
 1
 NIL
@@ -613,7 +631,7 @@ BUTTON
 43
 NIL
 go
-T
+NIL
 1
 T
 OBSERVER
@@ -688,7 +706,7 @@ uav-uav-separation
 uav-uav-separation
 0
 100
-4.0
+2.0
 1
 1
 NIL

@@ -14,12 +14,15 @@ globals[
   homex
   homey
   MAXenergy
+  MAXCount
   HUN
+  SCM
   recharge-speed
   typ1count
   typ2count
   num-genes
   gene-length
+  type-gene-num
 ]
 
 turtles-own [
@@ -43,11 +46,16 @@ uavs-own [
   nearest-home
   home-dist
   uspeed
+  current-target
+  sensor-range
 ]
 helis-own [
   current-target
-
-
+  sensor-range
+]
+targets-own [
+  marked
+  reset-counter
 ]
 ;================================
 ; SETUP Procedures
@@ -58,6 +66,7 @@ to setup
   reset-ticks
   set num-genes 29
   set gene-length 4
+  set type-gene-num 9
   set genetic-code-list random-genepool ; where the initial genes are set
   set generation-times n-values population-size [[]]
   ;show generation-times
@@ -65,8 +74,10 @@ to setup
   set generation-count 0
   set homex 0
   set homey 0
-  set HUN 16
+  set HUN 16 ; dominator of types coef
+  set SCM 17 ; dominator of sensor range
   set MAXenergy 200
+  set MAXCount 10
   set recharge-speed 10
   ;show genetic-code-list
   show generation-times
@@ -208,14 +219,16 @@ to setup-simulation [genetic-code]
   reset-ticks
 
   if show-background? [import-drawing "map.JPG"] ; display background image
-  let type1N (binary-to-decimal(graycode-to-binary(sublist genetic-code 12 16)))
+  let type1N (binary-to-decimal(graycode-to-binary(sublist genetic-code 0 4)))
   let type2N (binary-to-decimal(graycode-to-binary(sublist genetic-code 4 8)))
   ;read UAV properties from genetic code
   let UU-attraction-coeff (binary-to-decimal(graycode-to-binary(sublist genetic-code 0 4)))
   let UU-repulsion-coeff (binary-to-decimal(graycode-to-binary(sublist genetic-code 4 8)))
   let UT-attraction-coeff (binary-to-decimal(graycode-to-binary(sublist genetic-code 8 12)))
   let UT-repulsion-coeff (binary-to-decimal(graycode-to-binary(sublist genetic-code 12 16)))
-
+  let SR1-coef (binary-to-decimal(graycode-to-binary(sublist genetic-code 16 20)))
+  let sensor-range1 (SR1-coef + 1) * MAX-sensor-range / SCM
+  let uspeed1 (SCM - SR1-coef - 1) * MAX-uav-speed / SCM
   set typ1count type1N * agent-population / HUN
   ifelse typ1count < 1 [set typ1count 1] ; bound the pop of type1 and type2
   [
@@ -251,6 +264,7 @@ to setup-simulation [genetic-code]
     if types = 1 [set color yellow]
     if types = 2 [set color orange]
     set energy MAXenergy
+    set sensor-range sensor-range1
     set recharging 0
     setxy random-xcor / max-pxcor random-ycor / max-pycor
     set current-target nobody
@@ -258,9 +272,9 @@ to setup-simulation [genetic-code]
     set UU-repulsion UU-repulsion-coeff
     set UT-attraction UT-attraction-coeff
     set UT-repulsion UT-repulsion-coeff
-    set uspeed uav-speed
-    ;show testcount
-    ;show types
+    set uspeed uspeed1
+    show uspeed
+    show sensor-range1
   ]
 
   ;create targets
@@ -276,6 +290,7 @@ to setup-simulation [genetic-code]
     set color green
     set size 1
     setxy homex homey
+    set sensor-range MAX-sensor-range
   ]
 
   create-hangars 1[
@@ -304,24 +319,12 @@ to-report run-simulation
       find-uavs-close-range
       set nearest-home min-one-of hangars [distance myself]
       set home-dist distance nearest-home
-
-      ifelse any? targets-in-range
-      [set current-target min-one-of targets-in-range [distance myself]]
-      [ ifelse any? uavs-in-range
-          [set current-target [current-target] of (min-one-of uavs-in-range [distance myself])]
-          [set current-target nobody]
-      ]
-
-      if any? targets-close-range [
-        uav-avoid-target]        ; UAVs are repelled by targets in close range
-      if any? uavs-in-range       [uav-cohere]              ; UAVs are attracted to other UAVs who are pursuing targets
-      if any? uavs-close-range    [uav-avoid-uav]           ; UAvs are repelled by other UAVs in close range
-      uav-avoid-wall                                ; UAVs are repelled by walls in close range
-      turn-towards vector-summation uav-max-turn            ; the total "force" vector determines which direction the UAV turn
       ifelse recharging = 0
         [set energy energy - uspeed
         if (energy  < home-dist)
-        [facexy homex homey
+        [;facexy homex homey
+          uav-gohome
+          ;turn-towards [towards myself + 180] of nearest-home uav-max-turn
           ;turn-towards heading uav-max-turn
         if home-dist < 1 [set recharging 1]] ; go home if low
 
@@ -331,7 +334,23 @@ to-report run-simulation
 
         ]
 
+      ifelse any? targets-in-range
+      [set current-target min-one-of targets-in-range [distance myself]]
+      [ ifelse any? uavs-in-range
+          [set current-target [current-target] of (min-one-of uavs-in-range [distance myself]) ]
+          [set current-target nobody]
+      ]
+      if current-target != nobody
+      [uav-chase-target]
+      if any? targets-close-range [
+        uav-avoid-target]        ; UAVs are repelled by targets in close range
+      if any? uavs-in-range       [uav-cohere]              ; UAVs are attracted to other UAVs who are pursuing targets
+      if any? uavs-close-range    [uav-avoid-uav]           ; UAvs are repelled by other UAVs in close range
+      uav-avoid-wall                                ; UAVs are repelled by walls in close range
 
+
+
+turn-towards vector-summation uav-max-turn            ; the total "force" vector determines which direction the UAV turn
 
 
 
@@ -339,8 +358,8 @@ to-report run-simulation
     ] ; end of uavs
 
     ask helis[
-      ;find-targets-in-range
-      ;find-targets-close-range
+      find-targets-in-range
+      find-targets-close-range
 
       set targets-close-range targets with [color = red]
 
@@ -372,10 +391,13 @@ to-report run-simulation
       target-avoid-wall                                     ; the total "force" vector determines which direction the target turns
 
       turn-towards vector-summation target-max-turn
-
+      if color = red [
+        ifelse reset-counter < 0 [set color blue]
+        [set reset-counter reset-counter - 1]]
       if count uavs with [ current-target = myself ] >= 1 [
-        ask (uavs with [current-target = myself]) [set current-target nobody]
+        ;ask (uavs with [current-target = myself]) [set current-target nobody]
         set color red
+        set reset-counter MAXCount
       ]
     ]
 
@@ -398,7 +420,7 @@ to find-targets-in-range
 end
 
 to find-targets-close-range
-  set targets-close-range targets in-radius sensor-range
+  set targets-close-range targets in-radius uav-target-separation
 end
 
 to find-uavs-in-range
@@ -406,7 +428,7 @@ to find-uavs-in-range
 end
 
 to find-uavs-close-range
-  set uavs-close-range other uavs in-radius uav-uav-separation
+  set uavs-close-range other uavs in-radius uav-uav-separation with [recharging = 0]
 end
 
 to uav-avoid-target
@@ -424,7 +446,10 @@ to uav-cohere
       force-y + UU-attraction * sum [(distance myself - uav-uav-separation) / (sensor-range - uav-uav-separation)
       * cos (towards myself + 180)] of uavs-in-range
 end
-
+to uav-gohome
+  set force-x force-x + 50 * [sin (towards myself + 180)] of nearest-home
+  set force-y force-y + 50 * [cos (towards myself + 180)] of nearest-home
+end
 to uav-avoid-wall
   let uav-wall-separation uav-uav-separation
   set uav-wall-separation 0.9 * uav-wall-separation
@@ -447,6 +472,10 @@ to uav-avoid-uav
       * cos (towards myself) ] of uavs-close-range
 end
 
+to uav-chase-target ;; UAV procedure
+  set force-x force-x + UT-attraction * [sin (towards myself + 180)] of current-target
+  set force-y force-y + UT-attraction * [cos (towards myself + 180)] of current-target
+end
 ;========================================
 ; UAV movements
 ;========================================
@@ -509,7 +538,9 @@ end
 ;========================================
 ; conversion function
 ;========================================
+to assignprop [partial-gene]
 
+end
 to-report binary-to-decimal [bits]
   let bits-length (length bits) - 1
   let bits-decimal 0
@@ -553,11 +584,11 @@ end
 GRAPHICS-WINDOW
 265
 10
-911
-657
+840
+586
 -1
 -1
-7.8812
+7.0
 1
 10
 1
@@ -676,7 +707,7 @@ agent-population
 agent-population
 0
 100
-15.0
+10.0
 1
 1
 NIL
@@ -706,22 +737,22 @@ uav-uav-separation
 uav-uav-separation
 0
 100
-2.0
+3.0
 1
 1
 NIL
 HORIZONTAL
 
 SLIDER
-1218
-10
-1390
-43
-sensor-range
-sensor-range
+870
+16
+1070
+49
+MAX-sensor-range
+MAX-sensor-range
 0
 100
-6.0
+10.0
 1
 1
 patches
@@ -736,7 +767,7 @@ uav-target-separation
 uav-target-separation
 0
 100
-1.0
+2.0
 1
 1
 NIL
@@ -751,7 +782,7 @@ uav-max-turn
 uav-max-turn
 0
 100
-7.0
+20.0
 1
 1
 NIL
@@ -766,17 +797,17 @@ helis-speed
 helis-speed
 0
 2
-0.7
+0.5
 0.1
 1
 NIL
 HORIZONTAL
 
 SLIDER
-1220
-244
-1354
-277
+872
+250
+1006
+283
 target-max-turn
 target-max-turn
 0
@@ -788,10 +819,10 @@ NIL
 HORIZONTAL
 
 SLIDER
-1221
-145
-1355
-178
+871
+151
+1041
+184
 target-target-separation
 target-target-separation
 0
@@ -803,10 +834,10 @@ NIL
 HORIZONTAL
 
 SLIDER
-1219
-111
-1391
-144
+871
+117
+1043
+150
 target-sensor-range
 target-sensor-range
 0
@@ -818,25 +849,25 @@ NIL
 HORIZONTAL
 
 SLIDER
-1219
-76
-1391
-109
+871
+82
+1043
+115
 target-uav-repulsion
 target-uav-repulsion
 0
 100
-46.0
+42.0
 1
 1
 NIL
 HORIZONTAL
 
 SLIDER
-1221
-178
-1399
-211
+873
+184
+1051
+217
 target-target-repulsion
 target-target-repulsion
 0
@@ -852,26 +883,26 @@ SLIDER
 405
 195
 438
-uav-speed
-uav-speed
+MAX-uav-speed
+MAX-uav-speed
 0
 2
-0.2
+0.8
 0.1
 1
 NIL
 HORIZONTAL
 
 SLIDER
-1219
-44
-1391
-77
+871
+50
+1043
+83
 target-speed
 target-speed
 0
 1
-0.06
+0.59
 0.01
 1
 NIL
@@ -893,10 +924,10 @@ NIL
 HORIZONTAL
 
 SLIDER
-1220
-211
-1392
-244
+872
+217
+1044
+250
 mutation-rate
 mutation-rate
 0

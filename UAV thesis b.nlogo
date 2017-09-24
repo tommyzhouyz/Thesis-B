@@ -264,21 +264,22 @@ to setup-simulation [genetic-code]
        set types 2]
       [set types 3]
     ]
-    if types = 1
+    ifelse types = 1
     [set color yellow
     assignprop(sublist genetic-code 8 44)]
-    ifelse types = 2
+    [ifelse types = 2
     [set color orange
     assignprop(sublist genetic-code 44 80)]
     [assignprop(sublist genetic-code 80 116)]
+    ]
     set energy MAXenergy
 
     set recharging 0
     setxy random-xcor / max-pxcor random-ycor / max-pycor
     set current-target nobody
 
-    ;show uspeed
-    ;show sensor-range
+    show uspeed
+    show sensor-range
   ]
 
   ;create targets
@@ -760,7 +761,7 @@ agent-population
 agent-population
 0
 100
-10.0
+3.0
 1
 1
 NIL

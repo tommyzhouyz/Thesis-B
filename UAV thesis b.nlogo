@@ -23,6 +23,8 @@ globals[
   num-genes
   gene-length
   type-gene-num
+  u-avoid-u-coef
+  u-avoid-t-coef
 ]
 
 turtles-own [
@@ -41,6 +43,13 @@ uavs-own [
   UU-repulsion
   UT-attraction
   UT-repulsion
+
+  UU-attraction2
+  UU-repulsion2
+
+  UU-attraction3
+  UU-repulsion3
+
   energy
   recharging
   nearest-home
@@ -85,8 +94,8 @@ to setup
   let testlist binary-to-decimal(graycode-to-binary(item 1 genetic-code-list))
   ;let testlist1 (sublist testlist 0 3)
   ;show  testlist
-
-  ;show testlist
+  set u-avoid-u-coef 0.4 ; the coef for sensor range to avoid uav range , must <1
+  set u-avoid-t-coef 0.7 ; the coef for sensor range to avoid target range , must <1
 end
 
 to-report inc [i]
@@ -222,13 +231,7 @@ to setup-simulation [genetic-code]
   let type1N (binary-to-decimal(graycode-to-binary(sublist genetic-code 0 4)))
   let type2N (binary-to-decimal(graycode-to-binary(sublist genetic-code 4 8)))
   ;read UAV properties from genetic code
-  let UU-attraction-coeff (binary-to-decimal(graycode-to-binary(sublist genetic-code 0 4)))
-  let UU-repulsion-coeff (binary-to-decimal(graycode-to-binary(sublist genetic-code 4 8)))
-  let UT-attraction-coeff (binary-to-decimal(graycode-to-binary(sublist genetic-code 8 12)))
-  let UT-repulsion-coeff (binary-to-decimal(graycode-to-binary(sublist genetic-code 12 16)))
-  let SR1-coef (binary-to-decimal(graycode-to-binary(sublist genetic-code 16 20)))
-  let sensor-range1 (SR1-coef + 1) * MAX-sensor-range / SCM
-  let uspeed1 (SCM - SR1-coef - 1) * MAX-uav-speed / SCM
+
   set typ1count type1N * agent-population / HUN
   ifelse typ1count < 1 [set typ1count 1] ; bound the pop of type1 and type2
   [
@@ -261,20 +264,21 @@ to setup-simulation [genetic-code]
        set types 2]
       [set types 3]
     ]
-    if types = 1 [set color yellow]
-    if types = 2 [set color orange]
+    if types = 1
+    [set color yellow
+    assignprop(sublist genetic-code 8 44)]
+    ifelse types = 2
+    [set color orange
+    assignprop(sublist genetic-code 44 80)]
+    [assignprop(sublist genetic-code 80 116)]
     set energy MAXenergy
-    set sensor-range sensor-range1
+
     set recharging 0
     setxy random-xcor / max-pxcor random-ycor / max-pycor
     set current-target nobody
-    set UU-attraction UU-attraction-coeff
-    set UU-repulsion UU-repulsion-coeff
-    set UT-attraction UT-attraction-coeff
-    set UT-repulsion UT-repulsion-coeff
-    set uspeed uspeed1
-    show uspeed
-    show sensor-range1
+
+    ;show uspeed
+    ;show sensor-range
   ]
 
   ;create targets
@@ -312,7 +316,7 @@ to-report run-simulation
 
       set force-x 0
       set force-y 0
-      if show-energy [set label round energy]
+      ifelse show-energy [set label round energy] [set label ""]
       find-targets-in-range
       find-targets-close-range
       find-uavs-in-range
@@ -343,7 +347,7 @@ to-report run-simulation
       if current-target != nobody
       [uav-chase-target]
       if any? targets-close-range [
-        uav-avoid-target]        ; UAVs are repelled by targets in close range
+        uav-avoid-target(sensor-range)]        ; UAVs are repelled by targets in close range
       if any? uavs-in-range       [uav-cohere]              ; UAVs are attracted to other UAVs who are pursuing targets
       if any? uavs-close-range    [uav-avoid-uav]           ; UAvs are repelled by other UAVs in close range
       uav-avoid-wall                                ; UAVs are repelled by walls in close range
@@ -420,56 +424,93 @@ to find-targets-in-range
 end
 
 to find-targets-close-range
-  set targets-close-range targets in-radius uav-target-separation
+  set targets-close-range targets in-radius (u-avoid-t-coef * sensor-range)
 end
 
 to find-uavs-in-range
-  set uavs-in-range other uavs in-radius sensor-range with [current-target != nobody]
+  set uavs-in-range other uavs in-radius sensor-range with [current-target != nobody  ]
 end
 
 to find-uavs-close-range
-  set uavs-close-range other uavs in-radius uav-uav-separation with [recharging = 0]
+  set uavs-close-range other uavs in-radius (u-avoid-u-coef * sensor-range) with [recharging = 0]
 end
 
-to uav-avoid-target
+to uav-avoid-target [srange]
   set force-x
-      force-x + UT-repulsion * sum [(1 - (distance myself) / uav-target-separation) ^ 2 * sin (towards myself)] of targets-close-range
+      force-x + UT-repulsion * sum [(1 - (distance myself) / (u-avoid-t-coef * srange)) ^ 2 * sin (towards myself)] of targets-close-range
   set force-y
-      force-y + UT-repulsion * sum [(1 - (distance myself) / uav-target-separation) ^ 2 * cos (towards myself)] of targets-close-range
+      force-y + UT-repulsion * sum [(1 - (distance myself) / (u-avoid-t-coef * srange)) ^ 2 * cos (towards myself)] of targets-close-range
 end
 
 to uav-cohere
+  if uavs-in-range with [types = 1] != nobody[
   set force-x
-      force-x + UU-attraction * sum [(distance myself - uav-uav-separation) / (sensor-range - uav-uav-separation)
+      force-x + UU-attraction * sum [(distance myself - 0.5 * sensor-range) / (sensor-range - 0.5 * sensor-range)
       * sin (towards myself + 180)] of uavs-in-range
   set force-y
-      force-y + UU-attraction * sum [(distance myself - uav-uav-separation) / (sensor-range - uav-uav-separation)
+      force-y + UU-attraction * sum [(distance myself - 0.5 * sensor-range) / (sensor-range - 0.5 * sensor-range)
       * cos (towards myself + 180)] of uavs-in-range
+  ]
+  if uavs-in-range with [types = 2] != nobody[
+  set force-x
+      force-x + UU-attraction2 * sum [(distance myself - 0.5 * sensor-range) / (sensor-range - 0.5 * sensor-range)
+      * sin (towards myself + 180)] of uavs-in-range
+  set force-y
+      force-y + UU-attraction2 * sum [(distance myself - 0.5 * sensor-range) / (sensor-range - 0.5 * sensor-range)
+      * cos (towards myself + 180)] of uavs-in-range
+  ]
+  if uavs-in-range with [types = 3] != nobody[
+  set force-x
+      force-x + UU-attraction3 * sum [(distance myself - 0.5 * sensor-range) / (sensor-range - 0.5 * sensor-range)
+      * sin (towards myself + 180)] of uavs-in-range
+  set force-y
+      force-y + UU-attraction3 * sum [(distance myself - 0.5 * sensor-range) / (sensor-range - 0.5 * sensor-range)
+      * cos (towards myself + 180)] of uavs-in-range
+  ]
 end
 to uav-gohome
   set force-x force-x + 50 * [sin (towards myself + 180)] of nearest-home
   set force-y force-y + 50 * [cos (towards myself + 180)] of nearest-home
 end
 to uav-avoid-wall
-  let uav-wall-separation uav-uav-separation
+  let uav-wall-separation sensor-range
   set uav-wall-separation 0.9 * uav-wall-separation
   if xcor >= (max-pxcor - uav-wall-separation)
   [set force-x force-x - (1 - (max-pxcor - uav-wall-separation) / uav-wall-separation) ^ 2]
   if xcor <= (min-pxcor + uav-wall-separation)
   [set force-x force-x + (1 - (min-pxcor + uav-wall-separation) / uav-wall-separation) ^ 2]
-  if ycor >= (max-pycor - uav-uav-separation)
+  if ycor >= (max-pycor - 0.5 * sensor-range)
   [set force-y force-y - (1 - (max-pycor - uav-wall-separation) / uav-wall-separation) ^ 2]
-  if ycor <= (min-pycor + uav-uav-separation)
+  if ycor <= (min-pycor + 0.5 * sensor-range)
   [set force-y force-y + (1 - (min-pycor + uav-wall-separation) / uav-wall-separation) ^ 2]
 end
 
 to uav-avoid-uav
+
+  if uavs-close-range with [types = 1] != nobody[
   set force-x
-      force-x + UU-repulsion * sum[(distance myself - uav-uav-separation) ^ 2
+      force-x + UU-repulsion * sum[(distance myself - u-avoid-u-coef * sensor-range) ^ 2
       * sin (towards myself) ] of uavs-close-range
   set force-y
-      force-y + UU-repulsion * sum[(distance myself - uav-uav-separation) ^ 2
+      force-y + UU-repulsion * sum[(distance myself - u-avoid-u-coef * sensor-range) ^ 2
       * cos (towards myself) ] of uavs-close-range
+  ]
+  if uavs-close-range with [types = 2] != nobody[
+  set force-x
+      force-x + UU-repulsion2 * sum[(distance myself - u-avoid-u-coef * sensor-range) ^ 2
+      * sin (towards myself) ] of uavs-close-range
+  set force-y
+      force-y + UU-repulsion2 * sum[(distance myself - u-avoid-u-coef * sensor-range) ^ 2
+      * cos (towards myself) ] of uavs-close-range
+  ]
+  if uavs-close-range with [types = 3] != nobody[
+  set force-x
+      force-x + UU-repulsion3 * sum[(distance myself - u-avoid-u-coef * sensor-range) ^ 2
+      * sin (towards myself) ] of uavs-close-range
+  set force-y
+      force-y + UU-repulsion3 * sum[(distance myself - u-avoid-u-coef * sensor-range) ^ 2
+      * cos (towards myself) ] of uavs-close-range
+  ]
 end
 
 to uav-chase-target ;; UAV procedure
@@ -539,7 +580,19 @@ end
 ; conversion function
 ;========================================
 to assignprop [partial-gene]
+  let SR1-coef (binary-to-decimal(graycode-to-binary(sublist partial-gene 0 4)))
+  set UT-attraction (binary-to-decimal(graycode-to-binary(sublist partial-gene 4 8)))
+  set UT-repulsion (binary-to-decimal(graycode-to-binary(sublist partial-gene 8 12)))
+  set UU-attraction (binary-to-decimal(graycode-to-binary(sublist partial-gene 12 16)))
+  set UU-repulsion (binary-to-decimal(graycode-to-binary(sublist partial-gene 16 20)))
+  set UU-attraction2 (binary-to-decimal(graycode-to-binary(sublist partial-gene 20 24)))
+  set UU-repulsion2 (binary-to-decimal(graycode-to-binary(sublist partial-gene 24 28)))
+  set UU-attraction3 (binary-to-decimal(graycode-to-binary(sublist partial-gene 28 32)))
+  set UU-repulsion3 (binary-to-decimal(graycode-to-binary(sublist partial-gene 32 36)))
 
+
+  set sensor-range (SR1-coef + 1) * MAX-sensor-range / SCM
+  set uspeed (SCM - SR1-coef - 1) * MAX-uav-speed / SCM
 end
 to-report binary-to-decimal [bits]
   let bits-length (length bits) - 1
@@ -584,11 +637,11 @@ end
 GRAPHICS-WINDOW
 265
 10
-840
-586
+799
+545
 -1
 -1
-7.0
+6.5
 1
 10
 1
@@ -681,7 +734,7 @@ num-tests
 num-tests
 1
 100
-6.0
+10.0
 1
 1
 NIL
@@ -737,7 +790,7 @@ uav-uav-separation
 uav-uav-separation
 0
 100
-3.0
+9.0
 1
 1
 NIL
@@ -782,7 +835,7 @@ uav-max-turn
 uav-max-turn
 0
 100
-20.0
+33.0
 1
 1
 NIL
@@ -797,7 +850,7 @@ helis-speed
 helis-speed
 0
 2
-0.5
+0.7
 0.1
 1
 NIL
@@ -857,7 +910,7 @@ target-uav-repulsion
 target-uav-repulsion
 0
 100
-42.0
+17.0
 1
 1
 NIL
@@ -887,7 +940,7 @@ MAX-uav-speed
 MAX-uav-speed
 0
 2
-0.8
+1.0
 0.1
 1
 NIL
@@ -902,7 +955,7 @@ target-speed
 target-speed
 0
 1
-0.59
+0.31
 0.01
 1
 NIL
@@ -917,7 +970,7 @@ max-run-time
 max-run-time
 0
 10000
-3063.0
+3071.0
 1
 1
 NIL

@@ -25,6 +25,7 @@ globals[
   type-gene-num
   u-avoid-u-coef
   u-avoid-t-coef
+  best-pop-gene
 ]
 
 turtles-own [
@@ -98,9 +99,7 @@ to setup
   set u-avoid-t-coef 0.7 ; the coef for sensor range to avoid target range , must <1
 end
 
-to-report inc [i]
-  report i
-end
+
 to go
   ifelse generation-count <= max-generation
   [ foreach generation-times [
@@ -160,6 +159,7 @@ to global-max
   output-print testarray
   output-type " Best genetic code "
   output-print genetic-code-list
+  set best-pop-gene genetic-code-list
   output-type " Generation "
   output-print generation-count
 end
@@ -288,9 +288,11 @@ to setup-simulation [genetic-code]
     set color blue
     set size 1
     setxy random-xcor random-ycor
+    set marked 0
   ]
 
-  create-helis target-population [
+  create-helis floor agent-population / 2 + 1[
+    set current-target nobody
     set shape "airplane"
     set color green
     set size 1
@@ -348,7 +350,8 @@ to-report run-simulation
       if current-target != nobody
       [uav-chase-target]
       if any? targets-close-range [
-        uav-avoid-target(sensor-range)]        ; UAVs are repelled by targets in close range
+        ;uav-avoid-target(sensor-range)
+      ]        ; UAVs are repelled by targets in close range
       if any? uavs-in-range       [uav-cohere]              ; UAVs are attracted to other UAVs who are pursuing targets
       if any? uavs-close-range    [uav-avoid-uav]           ; UAvs are repelled by other UAVs in close range
       uav-avoid-wall                                ; UAVs are repelled by walls in close range
@@ -363,30 +366,29 @@ turn-towards vector-summation uav-max-turn            ; the total "force" vector
     ] ; end of uavs
 
     ask helis[
-      find-targets-in-range
-      find-targets-close-range
+      ;find-targets-in-range
+      ;find-targets-close-range
+      ask targets with [ color = red ] in-radius (sensor-range / 2) [die]
+      set targets-close-range targets with [color = red and marked = 0]
+      ifelse current-target != nobody [ifelse [color] of current-target = blue [set current-target nobody][face current-target]]
+      [facexy homex homey]
 
-      set targets-close-range targets with [color = red]
+      if any? targets-close-range
+      [ ;face min-one-of targets-close-range [distance myself]
+        ;fd helis-speed
+        ;ask min-one-of targets-close-range [distance myself] [set marked 1]
 
-      ifelse any? targets with [color = red]
-      [ face min-one-of targets-close-range [distance myself]
-        fd helis-speed
-        if any? targets-close-range [
-          fd helis-speed
-         ; move-to one-of targets-close-range
-        ]
+         ]
+       ;fd helis-speed
 
-        ask targets with [ color = red ] in-radius (sensor-range / 2) [die] ]
-      [ ;fd helis-speed
-        facexy homex homey
         ;stop
-      ]
+
     ]
 
     ask targets [
       set force-x 0
       set force-y 0
-
+      if color = blue [set marked 0]
       target-find-uavs-in-range
       target-find-targets-close-range
 
@@ -397,8 +399,19 @@ turn-towards vector-summation uav-max-turn            ; the total "force" vector
 
       turn-towards vector-summation target-max-turn
       if color = red [
-        ifelse reset-counter < 0 [set color blue]
-        [set reset-counter reset-counter - 1]]
+
+        ifelse reset-counter < 0 [set color blue set marked 0]
+
+         [set reset-counter reset-counter - 1
+
+          if marked = 0 [
+            let nearest-helis helis with [current-target = nobody]
+            set nearest-helis min-one-of nearest-helis [distance myself]
+
+            if nearest-helis != nobody [ask nearest-helis [set current-target myself] set marked 1]
+          ]
+         ]
+      ]
       if count uavs with [ current-target = myself ] >= 1 [
         ;ask (uavs with [current-target = myself]) [set current-target nobody]
         set color red
@@ -701,9 +714,9 @@ SLIDER
 114
 max-generation
 max-generation
-0
+1
 1000
-3.0
+0.0
 1
 1
 NIL
@@ -735,7 +748,7 @@ num-tests
 num-tests
 1
 100
-10.0
+1.0
 1
 1
 NIL
@@ -759,9 +772,9 @@ SLIDER
 212
 agent-population
 agent-population
-0
+3
 100
-3.0
+12.0
 1
 1
 NIL
@@ -774,9 +787,9 @@ SLIDER
 245
 target-population
 target-population
-0
+1
 100
-30.0
+31.0
 1
 1
 NIL
@@ -806,7 +819,7 @@ MAX-sensor-range
 MAX-sensor-range
 0
 100
-10.0
+12.0
 1
 1
 patches
@@ -819,9 +832,9 @@ SLIDER
 342
 uav-target-separation
 uav-target-separation
-0
+1
 100
-2.0
+1.0
 1
 1
 NIL
@@ -836,7 +849,7 @@ uav-max-turn
 uav-max-turn
 0
 100
-33.0
+50.0
 1
 1
 NIL
@@ -956,7 +969,7 @@ target-speed
 target-speed
 0
 1
-0.31
+0.5
 0.01
 1
 NIL
@@ -971,7 +984,7 @@ max-run-time
 max-run-time
 0
 10000
-3071.0
+1529.0
 1
 1
 NIL

@@ -8,7 +8,7 @@ globals[
   ;Heterogeneous
   genetic-code-list
   generation-times
-  fit-values
+  global-gene-num
   globalarray
   generation-count
   GA-mode
@@ -17,8 +17,10 @@ globals[
   homey
   MAXenergy
   MAXCount
+  GBASE
   HUN
   SCM
+  MAX-p
   recharge-speed
   typ1count
   typ2count
@@ -29,6 +31,7 @@ globals[
   u-avoid-u-coef
   u-avoid-t-coef
   best-pop-gene
+  p-dec
 ]
 
 turtles-own [
@@ -48,7 +51,9 @@ uavs-own [
   UU-attraction
   UU-repulsion
   UT-attraction
-  UT-repulsion
+  UP-attraction
+  p-coef
+  p-inc
 
   UU-attraction2
   UU-repulsion2
@@ -57,11 +62,11 @@ uavs-own [
   UU-repulsion3
 
   energy
-  recharging
+  recharging ; flag for indicating UAV recharging or not
   nearest-home
   home-dist
   uspeed
-  current-target
+
   sensor-range
 ]
 helis-own [
@@ -79,28 +84,31 @@ targets-own [
 to setup
   clear-all
   reset-ticks
-  set type-gene-num 9 ; number of genes for each type
-  set num-genes 2 + type-gene-num * 3 ; total number of genes [2 + type-gene-num * 3]
+  set type-gene-num 11 ; number of genes for each type
+  set global-gene-num 3
+  set num-genes global-gene-num + type-gene-num * 3 ; total number of genes [2 + type-gene-num * 3]
   if not Heterogeneous? [set num-genes type-gene-num]
-  set gene-length 4 ; the length in bits for each gene
+  set gene-length 5 ; the length in bits for each gene
   set gene-code-length gene-length * num-genes
   output-type "number of genes:"
   output-print num-genes
-  set genetic-code-list random-genepool ; where the initial genes are set
+  set genetic-code-list zero-genepool ; where the initial genes are set
   set generation-times n-values population-size [[]]
   ;show generation-times
   ;set globalarray n-values max-generation [[]]
   set generation-count 0
   set homex 0
   set homey 0
-  set HUN 2 ^ gene-length + 0; denominator of types coef [2^gene-length+1]
+  set GBASE 2 ^ gene-length - 1
+  set HUN 2 ^ gene-length + 0; denominator of types coef [2^gene-length]
   set SCM 2 ^ gene-length + 1 ; denominator of sensor range
+  set MAX-p 255
   output-type "HUN:"
   output-print HUN
   output-type "SCM:"
   output-print SCM
   set MAXenergy 200
-  set MAXCount 10
+  set MAXCount 10 ; time for targets to reset its state after being lost
   set recharge-speed 10
   ;show genetic-code-list
   show generation-times
@@ -171,12 +179,26 @@ to-report random-genepool
   report random-code-list
 end
 
+to-report zero-genepool
+  ;; local variables
+  ;let gene-length 4
+  ;let num-genes 29
+  let chromosome-length gene-length * num-genes
+  let random-code-list n-values population-size [n-values chromosome-length [0]]
+  ;output-type "random gene"
+  ;show binary-to-decimal(graycode-to-binary(position 1 random-code-list))
+  report random-code-list
+end
+
 to-report avg-time [genetic-code] ;where the simulation runs
   let total-time 0
+  let this-time 0
   ;show genetic-code
   repeat num-tests[
     setup-simulation (genetic-code)
-    set total-time (total-time + run-simulation)
+    set this-time run-simulation
+    ;show this-time
+    set total-time (total-time + this-time)
   ]
   let average-time(total-time / num-tests)
   output-type "time "
@@ -202,6 +224,7 @@ to global-max
 
   output-type " Best time so far: "
   output-print besttime
+  output-type " Global best time so far: "
   output-print testarray
   output-type " Best genetic code "
   output-print genetic-code-list
@@ -284,12 +307,13 @@ end
 to setup-simulation [genetic-code]
   clear-turtles
   reset-ticks
-
+  let gl gene-length
   if show-background? [import-drawing "map.JPG"] ; display background image
-  let type1N (binary-to-decimal(graycode-to-binary(sublist genetic-code 0 4)))
-  let type2N (binary-to-decimal(graycode-to-binary(sublist genetic-code 4 8)))
+  let type1N (binary-to-decimal(graycode-to-binary(sublist genetic-code 0 gl)))
+  let type2N (binary-to-decimal(graycode-to-binary(sublist genetic-code gl (2 * gl))))
+  set p-dec (binary-to-decimal(graycode-to-binary(sublist genetic-code (2 * gl) (3 * gl))))
   ;read UAV properties from genetic code
-
+  set p-dec p-dec * MAX-pDEC / HUN
   set typ1count type1N * agent-population / HUN
   ifelse typ1count < 1 [set typ1count 1] ; bound the pop of type1 and type2
   [
@@ -311,9 +335,12 @@ to setup-simulation [genetic-code]
   ; create uavs
   create-uavs agent-population [
     ;set testcount testcount + 1
+
+    let tglist type-gene-num * gene-length
+    let gglist global-gene-num * gene-length
     set shape "default"
     set size 1
-    set color white
+    set color violet
 ; decide type
     ifelse typ1count > 0.5
     [ set typ1count typ1count - 1
@@ -325,13 +352,13 @@ to setup-simulation [genetic-code]
     ]
     ifelse types = 1
     [set color yellow
-      ifelse Heterogeneous? [assignprop(sublist genetic-code 8 44)]
-      [assignprop(sublist genetic-code 0 36)]
+      ifelse Heterogeneous? [assignprop(sublist genetic-code gglist (gglist + tglist))] ; 8 48
+      [assignprop(sublist genetic-code 0 tglist)]
     ]
     [ifelse types = 2
     [set color orange
-    assignprop(sublist genetic-code 44 80)]
-    [assignprop(sublist genetic-code 80 116)]
+    assignprop(sublist genetic-code (gglist + tglist) (gglist + 2 * tglist))]
+    [assignprop(sublist genetic-code (gglist + 2 * tglist) (gglist + 3 * tglist))]
     ]
     set energy MAXenergy
 
@@ -387,18 +414,26 @@ to-report run-simulation
       find-uavs-close-range
       set nearest-home min-one-of hangars [distance myself]
       set home-dist distance nearest-home
+      if Bayesian-method?
+      [
+        let pinc p-inc * MAX-pINC / (2 ^ gene-length)
+        ask patches in-radius sensor-range [set p-value p-value + pinc]
+      ]
       ifelse recharging = 0
         [set energy energy - uspeed
-        ifelse (energy  < home-dist)
-        [;facexy homex homey
+          if current-target != nobody [let tsr sensor-range ask current-target [ask patches in-radius tsr [set p-value 0 set pcolor black]]]
+          ifelse (energy  < home-dist)
+        [
           uav-gohome
-          ;turn-towards [towards myself + 180] of nearest-home uav-max-turn
-          ;turn-towards heading uav-max-turn
+
         if home-dist < 1 [set recharging 1]] ; go home if low
         ; do general stuff
         [if any? uavs-close-range    [uav-avoid-uav]           ; UAvs are repelled by other UAVs in close range
           ifelse current-target != nobody
-          [uav-chase-target]
+          [uav-chase-target
+
+
+          ]
           [if Bayesian-method? [uav-search-Lp]]
         ]
 
@@ -420,7 +455,7 @@ to-report run-simulation
       ;]        ; UAVs are repelled by targets in close range
       if any? uavs-in-range       [uav-cohere]              ; UAVs are attracted to other UAVs who are pursuing targets
 
-      uav-avoid-wall                                ; UAVs are repelled by walls in close range
+if current-target = nobody [uav-avoid-wall]                                ; UAVs are repelled by walls in close range
 
 
 
@@ -428,16 +463,16 @@ to-report run-simulation
 
 
     ;ask patch-ahead sensor-range [ set p-value p-value + 8 ]
-     if Bayesian-method?
-      [ask patches in-radius sensor-range [set p-value p-value + 5]]
+
     ] ; end of uavs
 
 
     ask patches with [p-value > 0] [
-      set p-value p-value - 0.2
-      if p-value > 1 * 255 [set p-value 1 * 255]
+      if not test-bayesian? [set p-value p-value - p-dec]
+      if p-value > MAX-p [set p-value MAX-p]
       if p-value < 0 [set p-value 0]
-      set pcolor rgb p-value 0 (p-value)
+      let p-c p-value * 1.5 / 2
+      set pcolor rgb p-c p-c p-c
       if not Bayesian-method? [set p-value 0 set pcolor black]
     ]
 ;end of patches
@@ -528,9 +563,9 @@ end
 
 to uav-avoid-target [srange]
   set force-x
-      force-x + UT-repulsion * sum [(1 - (distance myself) / (u-avoid-t-coef * srange)) ^ 2 * sin (towards myself)] of targets-close-range
+      force-x + UP-attraction * sum [(1 - (distance myself) / (u-avoid-t-coef * srange)) ^ 2 * sin (towards myself)] of targets-close-range
   set force-y
-      force-y + UT-repulsion * sum [(1 - (distance myself) / (u-avoid-t-coef * srange)) ^ 2 * cos (towards myself)] of targets-close-range
+      force-y + UP-attraction * sum [(1 - (distance myself) / (u-avoid-t-coef * srange)) ^ 2 * cos (towards myself)] of targets-close-range
 end
 
 to uav-cohere
@@ -565,7 +600,7 @@ to uav-gohome
 end
 to uav-avoid-wall
   let uav-wall-separation sensor-range
-  set uav-wall-separation 0.8 * uav-wall-separation
+  set uav-wall-separation 0.7 * uav-wall-separation
   if xcor >= (max-pxcor - uav-wall-separation)
   [set force-x force-x - (1 - (max-pxcor - uav-wall-separation) / uav-wall-separation) ^ 2]
   if xcor <= (min-pxcor + uav-wall-separation)
@@ -578,17 +613,17 @@ end
 
 
 to uav-search-Lp ; go to areas with low p-values
-  let uav-p-separation sensor-range
+  let uav-p-separation 1 * sensor-range ; could be decided by genes
   let miu 0.1
   let angle-list n-values 36 [[k] -> 5 * k]
   ;set uav-p-separation 0.8 * uav-p-separation
-  let min-p 10000
+  let min-p MAX-p + 10000
   let min-patch nobody
-  foreach angle-list
+  foreach angle-list ; finds the patch with the lowest p-value in the senor circle
   [[i] ->
 
     let temp-patch (patch-right-and-ahead i uav-p-separation)
-    let t-p 10000
+    let t-p MAX-p + 10000
     if temp-patch != nobody
     [set t-p miu * i + [p-value] of temp-patch
     if t-p <= min-p [set min-p t-p set min-patch temp-patch]
@@ -604,12 +639,12 @@ to uav-search-Lp ; go to areas with low p-values
 
 
   let p-ahead min-patch
-  let p-coef 0.8
+  ;let p-coef 0.8
 
   if p-ahead != nobody [
-    let p-repulsion ([p-value] of p-ahead) * p-coef
-    set force-x force-x + p-repulsion * [sin (towards myself + 180)] of p-ahead
-    set force-y force-y + p-repulsion * [cos (towards myself + 180)] of p-ahead
+    let p-attraction (MAX-p - ([p-value] of p-ahead)) * p-coef
+    set force-x force-x + p-attraction * [sin (towards myself + 180)] of p-ahead
+    set force-y force-y + p-attraction * [cos (towards myself + 180)] of p-ahead
   ]
 
 end
@@ -708,19 +743,24 @@ end
 ; conversion function
 ;========================================
 to assignprop [partial-gene]
-  let SR1-coef (binary-to-decimal(graycode-to-binary(sublist partial-gene 0 4))) ;sensor and range
-  set UT-attraction (binary-to-decimal(graycode-to-binary(sublist partial-gene 4 8)))
-  set UT-repulsion (binary-to-decimal(graycode-to-binary(sublist partial-gene 8 12)))
-  set UU-attraction (binary-to-decimal(graycode-to-binary(sublist partial-gene 12 16)))
-  set UU-repulsion (binary-to-decimal(graycode-to-binary(sublist partial-gene 16 20)))
-  set UU-attraction2 (binary-to-decimal(graycode-to-binary(sublist partial-gene 20 24)))
-  set UU-repulsion2 (binary-to-decimal(graycode-to-binary(sublist partial-gene 24 28)))
-  set UU-attraction3 (binary-to-decimal(graycode-to-binary(sublist partial-gene 28 32)))
-  set UU-repulsion3 (binary-to-decimal(graycode-to-binary(sublist partial-gene 32 36)))
-
-
-  set sensor-range (SR1-coef + 1) * MAX-sensor-range / SCM
-  set uspeed (SCM - SR1-coef - 1) * MAX-uav-speed / SCM
+  let gl gene-length
+  let SR1-coef (binary-to-decimal(graycode-to-binary(sublist partial-gene 0 (1 * gl)))) ;sensor and range
+  set UT-attraction (binary-to-decimal(graycode-to-binary(sublist partial-gene (1 * gl) (2 * gl))))
+  set UP-attraction (binary-to-decimal(graycode-to-binary(sublist partial-gene (2 * gl) (3 * gl))))
+  set UU-attraction (binary-to-decimal(graycode-to-binary(sublist partial-gene (3 * gl) (4 * gl))))
+  set UU-repulsion (binary-to-decimal(graycode-to-binary(sublist partial-gene (4 * gl) (5 * gl))))
+  set UU-attraction2 (binary-to-decimal(graycode-to-binary(sublist partial-gene (5 * gl) (6 * gl))))
+  set UU-repulsion2 (binary-to-decimal(graycode-to-binary(sublist partial-gene (6 * gl) (7 * gl))))
+  set UU-attraction3 (binary-to-decimal(graycode-to-binary(sublist partial-gene (7 * gl) (8 * gl))))
+  set UU-repulsion3 (binary-to-decimal(graycode-to-binary(sublist partial-gene (8 * gl) (9 * gl))))
+  set p-inc (binary-to-decimal(graycode-to-binary(sublist partial-gene (9 * gl) (10 * gl))))
+  set p-coef (binary-to-decimal(graycode-to-binary(sublist partial-gene (10 * gl) (11 * gl)))) ; 40 44
+  set p-coef p-coef / GBASE
+  ;set sensor-range (SR1-coef + 1) * MAX-sensor-range / SCM
+  ;set uspeed (SCM - SR1-coef - 1) * MAX-uav-speed / SCM
+  set sensor-range (SR1-coef ) * MAX-sensor-range / GBASE
+  set uspeed (SCM - SR1-coef) * MAX-uav-speed / GBASE
+  if sensor-range = 0 [set sensor-range 0.001]
 end
 to-report binary-to-decimal [bits]
   let bits-length (length bits) - 1
@@ -783,7 +823,7 @@ to my-update-plots
 let average-time ((sum generation-times) / (length generation-times))
 set-current-plot "Fitness Plot"
 set-current-plot-pen "Fitness" ;plot minimum-fitness
-ifelse GA-mode = 1 [plot min generation-times][plot max-run-time / (min generation-times)]
+ifelse GA-mode = 1 [plot min generation-times][plot (max-run-time - (min generation-times)) / max-run-time ]
 
 set-current-plot "Diversity Plot"
 set-current-plot-pen "diversity"
@@ -844,7 +884,7 @@ population-size
 population-size
 0
 100
-40.0
+6.0
 1
 1
 NIL
@@ -891,7 +931,7 @@ num-tests
 num-tests
 1
 100
-100.0
+1.0
 1
 1
 NIL
@@ -932,7 +972,7 @@ target-population
 target-population
 1
 100
-30.0
+65.0
 1
 1
 NIL
@@ -945,7 +985,7 @@ SLIDER
 49
 MAX-sensor-range
 MAX-sensor-range
-0
+1
 100
 9.0
 1
@@ -962,7 +1002,7 @@ uav-max-turn
 uav-max-turn
 0
 100
-50.0
+20.0
 1
 1
 NIL
@@ -977,7 +1017,7 @@ helis-speed
 helis-speed
 0
 2
-0.7
+1.0
 0.1
 1
 NIL
@@ -1082,7 +1122,7 @@ target-speed
 target-speed
 0
 1
-0.14
+0.05
 0.01
 1
 NIL
@@ -1097,7 +1137,7 @@ max-run-time
 max-run-time
 0
 10000
-4140.0
+1146.0
 1
 1
 NIL
@@ -1151,8 +1191,8 @@ INPUTBOX
 113
 1241
 173
-file-name
-NIL
+save-file-name
+gene.txt
 1
 0
 String
@@ -1168,7 +1208,7 @@ Fitness Value
 0.0
 20.0
 0.0
-3.0
+1.0
 true
 false
 "" ""
@@ -1239,10 +1279,10 @@ NIL
 1
 
 BUTTON
-27
-420
-90
-453
+18
+463
+81
+496
 stop
 stop
 NIL
@@ -1265,6 +1305,81 @@ Bayesian-method?
 0
 1
 -1000
+
+SWITCH
+1095
+480
+1233
+513
+test-bayesian?
+test-bayesian?
+1
+1
+-1000
+
+SLIDER
+23
+374
+195
+407
+MAX-pINC
+MAX-pINC
+0
+100
+16.0
+1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+23
+407
+195
+440
+MAX-pDEC
+MAX-pDEC
+0
+100
+4.0
+1
+1
+NIL
+HORIZONTAL
+
+BUTTON
+1004
+172
+1156
+205
+save generation gene
+file-open save-file-name\nfile-write genetic-code-list\nfile-close
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+BUTTON
+1155
+172
+1273
+205
+load generation
+file-open save-file-name\nset genetic-code-list file-read \nfile-close
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
 
 @#$#@#$#@
 ## WHAT IS IT?

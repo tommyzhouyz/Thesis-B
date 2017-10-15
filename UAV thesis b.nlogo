@@ -85,6 +85,8 @@ to setup
   clear-all
   reset-ticks
   set type-gene-num 11 ; number of genes for each type
+  set testarray 10000
+  if not Heterogeneous? [set type-gene-num 7]
   set global-gene-num 3
   set num-genes global-gene-num + type-gene-num * 3 ; total number of genes [2 + type-gene-num * 3]
   if not Heterogeneous? [set num-genes type-gene-num]
@@ -92,7 +94,8 @@ to setup
   set gene-code-length gene-length * num-genes
   output-type "number of genes:"
   output-print num-genes
-  set genetic-code-list zero-genepool ; where the initial genes are set
+  ;set genetic-code-list zero-genepool ; where the initial genes are set
+  set genetic-code-list random-genepool
   set generation-times n-values population-size [[]]
   ;show generation-times
   ;set globalarray n-values max-generation [[]]
@@ -745,17 +748,30 @@ end
 to assignprop [partial-gene]
   let gl gene-length
   let SR1-coef (binary-to-decimal(graycode-to-binary(sublist partial-gene 0 (1 * gl)))) ;sensor and range
-  set UT-attraction (binary-to-decimal(graycode-to-binary(sublist partial-gene (1 * gl) (2 * gl))))
-  set UP-attraction (binary-to-decimal(graycode-to-binary(sublist partial-gene (2 * gl) (3 * gl))))
-  set UU-attraction (binary-to-decimal(graycode-to-binary(sublist partial-gene (3 * gl) (4 * gl))))
-  set UU-repulsion (binary-to-decimal(graycode-to-binary(sublist partial-gene (4 * gl) (5 * gl))))
-  set UU-attraction2 (binary-to-decimal(graycode-to-binary(sublist partial-gene (5 * gl) (6 * gl))))
-  set UU-repulsion2 (binary-to-decimal(graycode-to-binary(sublist partial-gene (6 * gl) (7 * gl))))
-  set UU-attraction3 (binary-to-decimal(graycode-to-binary(sublist partial-gene (7 * gl) (8 * gl))))
-  set UU-repulsion3 (binary-to-decimal(graycode-to-binary(sublist partial-gene (8 * gl) (9 * gl))))
-  set p-inc (binary-to-decimal(graycode-to-binary(sublist partial-gene (9 * gl) (10 * gl))))
-  set p-coef (binary-to-decimal(graycode-to-binary(sublist partial-gene (10 * gl) (11 * gl)))) ; 40 44
-  set p-coef p-coef / GBASE
+  ifelse Heterogeneous? [
+
+    set UT-attraction (binary-to-decimal(graycode-to-binary(sublist partial-gene (1 * gl) (2 * gl))))
+    set UP-attraction (binary-to-decimal(graycode-to-binary(sublist partial-gene (2 * gl) (3 * gl))))
+    set UU-attraction (binary-to-decimal(graycode-to-binary(sublist partial-gene (3 * gl) (4 * gl))))
+    set UU-repulsion (binary-to-decimal(graycode-to-binary(sublist partial-gene (4 * gl) (5 * gl))))
+    set UU-attraction2 (binary-to-decimal(graycode-to-binary(sublist partial-gene (5 * gl) (6 * gl))))
+    set UU-repulsion2 (binary-to-decimal(graycode-to-binary(sublist partial-gene (6 * gl) (7 * gl))))
+    set UU-attraction3 (binary-to-decimal(graycode-to-binary(sublist partial-gene (7 * gl) (8 * gl))))
+    set UU-repulsion3 (binary-to-decimal(graycode-to-binary(sublist partial-gene (8 * gl) (9 * gl))))
+    set p-inc (binary-to-decimal(graycode-to-binary(sublist partial-gene (9 * gl) (10 * gl))))
+    set p-coef (binary-to-decimal(graycode-to-binary(sublist partial-gene (10 * gl) (11 * gl)))) ; 40 44
+    set p-coef p-coef / GBASE
+  ]
+  [
+
+    set UT-attraction (binary-to-decimal(graycode-to-binary(sublist partial-gene (1 * gl) (2 * gl))))
+    set UP-attraction (binary-to-decimal(graycode-to-binary(sublist partial-gene (2 * gl) (3 * gl))))
+    set UU-attraction (binary-to-decimal(graycode-to-binary(sublist partial-gene (3 * gl) (4 * gl))))
+    set UU-repulsion (binary-to-decimal(graycode-to-binary(sublist partial-gene (4 * gl) (5 * gl))))
+    set p-inc (binary-to-decimal(graycode-to-binary(sublist partial-gene (5 * gl) (6 * gl))))
+    set p-coef (binary-to-decimal(graycode-to-binary(sublist partial-gene (6 * gl) (7 * gl)))) ; 40 44
+    set p-coef p-coef / GBASE
+  ]
   ;set sensor-range (SR1-coef + 1) * MAX-sensor-range / SCM
   ;set uspeed (SCM - SR1-coef - 1) * MAX-uav-speed / SCM
   set sensor-range (SR1-coef ) * MAX-sensor-range / GBASE
@@ -884,7 +900,7 @@ population-size
 population-size
 0
 100
-6.0
+12.0
 1
 1
 NIL
@@ -931,7 +947,7 @@ num-tests
 num-tests
 1
 100
-1.0
+24.0
 1
 1
 NIL
@@ -1152,8 +1168,8 @@ mutation-rate
 mutation-rate
 0
 100
-5.0
-1
+1.5
+0.5
 1
 NIL
 HORIZONTAL
@@ -1192,7 +1208,7 @@ INPUTBOX
 1241
 173
 save-file-name
-gene.txt
+homo gen.txt
 1
 0
 String
@@ -1257,7 +1273,7 @@ SWITCH
 442
 Heterogeneous?
 Heterogeneous?
-0
+1
 1
 -1000
 

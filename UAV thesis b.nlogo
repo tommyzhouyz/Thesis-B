@@ -111,7 +111,7 @@ to setup
   output-type "SCM:"
   output-print SCM
   set MAXenergy 200
-  set MAXCount 10 ; time for targets to reset its state after being lost
+  set MAXCount 5 ; time for targets to reset its state after being lost
   set recharge-speed 10
   ;show genetic-code-list
   show generation-times
@@ -160,6 +160,7 @@ to go-GA
       ;output-type "wut"
       show generation-count
       my-update-plots
+      if testarray <= 0.05 [stop]
   ]
   [ stop ]
 end
@@ -447,7 +448,9 @@ to-report run-simulation
         ]
 
       ifelse any? targets-in-range
-      [set current-target min-one-of targets-in-range [distance myself]]
+      [set current-target min-one-of targets-in-range [distance myself]
+        ask targets-in-range [set color red set reset-counter MAXCount]
+      ]
       [ ifelse any? uavs-in-range
           [set current-target [current-target] of (min-one-of uavs-in-range [distance myself]) ]
           [set current-target nobody]
@@ -839,7 +842,7 @@ to my-update-plots
 let average-time ((sum generation-times) / (length generation-times))
 set-current-plot "Fitness Plot"
 set-current-plot-pen "Fitness" ;plot minimum-fitness
-ifelse GA-mode = 1 [plot min generation-times][plot (max-run-time - (min generation-times)) / max-run-time ]
+ifelse GA-mode = 1 [plot 1 - (min generation-times)][plot (max-run-time - (min generation-times)) / max-run-time ]
 
 set-current-plot "Diversity Plot"
 set-current-plot-pen "diversity"
@@ -947,7 +950,7 @@ num-tests
 num-tests
 1
 100
-24.0
+12.0
 1
 1
 NIL
@@ -1078,7 +1081,7 @@ target-sensor-range
 target-sensor-range
 0
 100
-9.0
+11.0
 1
 1
 NIL
@@ -1138,7 +1141,7 @@ target-speed
 target-speed
 0
 1
-0.05
+0.5
 0.01
 1
 NIL
@@ -1168,7 +1171,7 @@ mutation-rate
 mutation-rate
 0
 100
-1.5
+3.0
 0.5
 1
 NIL
@@ -1208,7 +1211,7 @@ INPUTBOX
 1241
 173
 save-file-name
-homo gen.txt
+hetero_speed_0dot5_gen.txt
 1
 0
 String
@@ -1273,43 +1276,9 @@ SWITCH
 442
 Heterogeneous?
 Heterogeneous?
-1
+0
 1
 -1000
-
-BUTTON
-107
-453
-192
-486
-show uua
-ask uavs [show UU-attraction]
-NIL
-1
-T
-OBSERVER
-NIL
-NIL
-NIL
-NIL
-1
-
-BUTTON
-18
-463
-81
-496
-stop
-stop
-NIL
-1
-T
-OBSERVER
-NIL
-NIL
-NIL
-NIL
-1
 
 SWITCH
 914
